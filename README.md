@@ -37,16 +37,16 @@ $$ R_k  \begin{cases}
 | -------- | ----------- |
 | $in_i$ and $out_i$ | amount of resource input and output "i", respectively | 
 | $v_i$ | specific value of resource "i" |
-| $\gamma^\omega$ | size factor for technology "$\omega$" |
-| $T_{in,i}^{\omega}$ and $T_{out,i}^{\omega}$ | input and output amount of resource "i" for technology "$\omega$", respectively |
+| $\gamma^\omega$ | size factor for technology $\omega$ |
+| $T_{in,i}^{\omega}$ and $T_{out,i}^{\omega}$ | input and output amount of resource "i" for technology $\omega$, respectively |
 | $R_k$ | Net heat of temperature interval "k" in Heat cascade |
-| $\dot Q_{n,k}^\omega $ | Heat transfer of stream "n" in temperature interval "k" for technology "$\omega$" |
+| $\dot Q_{n,k}^\omega $ | Heat transfer of stream "n" in temperature interval "k" for technology $\omega$ |
 | $i$ and $I$ | input number and total number of inputs, respectively |
 | $o$ and $O$ | output number and total number of outputs, respectively |
 | $n$ and $N$ | stream number and total number of streams, respectively |
 | $k$ and $K$ | temperature interval number and total number of temperature intervals, respectively |
 
-In simple terms, vivi will determine the set of size factors ($\gamma^\omega$), inputs ($in_i$) and outputs ($out_o$) that optimize the value of outputs ($ \sum_o^{O} out_o \cdot v_o$), discounting the inputs value ($\sum_i^{I} in_i \cdot v_i$), and respecting the balance of resources and heat cascade (first and second constraint, respectively). If the amount of a certain input or output is fixed (e.g., $in_i\neq Inf$), this information it is also accounted as an additional constraint.
+In simple terms, vivi will determine the set of size factors $(\gamma^\omega)$, inputs $(in_i)$ and outputs $(out_o)$ that optimize the value of outputs, discounting the inputs value, and respecting the balance of resources and heat cascade (first and second constraint, respectively). If the amount of a certain input or output is fixed (e.g., $in_i\neq Inf$), this information it is also accounted as an additional constraint.
 
 **Note**: "value" can be a monetary figure, energy, exergy, carbon, amoung others.
 

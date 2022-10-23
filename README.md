@@ -9,9 +9,9 @@ $$ \max_{\gamma^\omega,in_i,out_i,R_k} \left [ \sum_o^{O} out_o \cdot v_o - \sum
 
 $s.t.$
 
-$$ in_i + \sum_{\omega}^{\Omega} \gamma^\omega\left (T_{in,i}^{\omega} - T_{out,i}^{\omega} \right) + out_i \text{ } \forall \text{ } i \in \text{Resources} $$
+$$ in_i + \sum_{\omega}^{\Omega} \gamma^\omega\left (T_{out,i}^{\omega} - T_{in,i}^{\omega} \right) = out_i \text{ } \forall \text{ } i \in \text{Resources} $$
 
-$$ R_k + \sum_{\omega}^{\Omega} \left (\gamma^{\omega} \sum_n^N \dot Q_{n,k}^{\omega} \right) = R_{k-1} \text{ } \forall \text{ } k \in \text{ Heat cascade}$$
+$$ R_{k-1} + \sum_{\omega}^{\Omega} \left (\gamma^{\omega} \sum_n^N \dot Q_{n,k}^{\omega} \right) = R_{k} \text{ } \forall \text{ } k \in \text{ Heat cascade}$$
 
 In which,
 

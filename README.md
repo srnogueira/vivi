@@ -40,7 +40,7 @@ $$ R_k  \begin{cases}
 | $\gamma^\omega$ | size factor for technology $\omega$ |
 | $T_{in,i}^{\omega}$ and $T_{out,i}^{\omega}$ | input and output amount of resource "i" for technology $\omega$, respectively |
 | $R_k$ | Net heat of temperature interval "k" in Heat cascade |
-| $\dot Q_{n,k}^\omega $ | Heat transfer of stream "n" in temperature interval "k" for technology $\omega$ |
+| $Q_{n,k}^\omega$ | Heat transfer of stream "n" in temperature interval "k" for technology $\omega$ |
 | $i$ and $I$ | input number and total number of inputs, respectively |
 | $o$ and $O$ | output number and total number of outputs, respectively |
 | $n$ and $N$ | stream number and total number of streams, respectively |
@@ -62,7 +62,8 @@ Nakashima, R. N. (2022). Modelling, simulation and optimization of biogas conver
     
     @phdthesis{nakashima_modelling_2022,
 	    address = {São Paulo},
-	    title = {Modelling, simulation and optimization of biogas conversion routes integrated with fuel cell technology.},
+	    title = {Modelling, simulation and optimization of biogas 
+        conversion routes integrated with fuel cell technology.},
 	    url = {https://www.teses.usp.br/teses/disponiveis/3/3150/tde-26082022-081436/},
 	    language = {en},
 	    urldate = {2022-09-05},

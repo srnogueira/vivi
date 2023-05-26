@@ -25,6 +25,7 @@ end
 
 Resource(type::String,amount::Real,unit::String,value::Vector{Int64}) = Resource(type,[amount],unit,[[i] for i in value])   # Legacy code compatibility
 Resource(type::String,amount::Real,unit::String,value::Vector{Float64}) = Resource(type,[amount],unit,[[i] for i in value]) # Legacy code compatibility
+Resource(type::String,amount::Real;unit="",value=[[0]]) = Resource(type,[amount],unit=unit,value=value)
 
 mutable struct Tech
     type::String                # Unique name
@@ -38,12 +39,12 @@ mutable struct Tech
     size::Vector{Real}          # Size factors - answer
 end
 
-function Tech(type;in=[],out=[],heat=[],limits=[0,Inf],cost=zeros(3),loads=[0,1],rate=[-1,1],size=[0])
+function Tech(type;in=[],out=[],heat=[],limits=[0,Inf],cost=zeros(3),loads=[0,1],rate=[-1,1],size=[1])
     return Tech(type,in,out,heat,limits,cost,loads,rate,size)
 end
 
-Tech(type,in,out,heat) = Tech(type,in=in,out=out,heat=heat) # Legacy code compatibility
-Tech(type,in,out,heat,limits,cost::Real,loads;rate=[-1,1]) = Tech(type,in=in,out=out,heat=heat,limits=limits,cost=[cost],loads=loads,rate=rate) # Legacy code compatibility
+Tech(type,in,out,heat;limits=[0,Inf],cost=zeros(3),loads=[0,1],rate=[-1,1]) = Tech(type,in=in,out=out,heat=heat,limits=limits,cost=cost,loads=loads,rate=rate) # Legacy code compatibility
+Tech(type,in,out,heat,limits,cost::Real,loads;rate=[-1,1]) = Tech(type,in=in,out=out,heat=heat,limits=limits,cost=[cost,0],loads=loads,rate=rate) # Legacy code compatibility
 
 mutable struct Storage
     type::String             # Resource name
@@ -54,7 +55,7 @@ mutable struct Storage
     size::Vector{Real}       # Size factors - answer
 end
 
-function Storage(type,max;amount=0,cost=zeros(3),rate=[-1,1],size=[0])
+function Storage(type,max;amount=0,cost=zeros(3),rate=[-1,1],size=[1])
     return Storage(type,amount,max,cost,rate,size)
 end
 
@@ -81,7 +82,7 @@ Heat(h,Ts,Tt) = HeatStruct(h,Ts,Tt)
 # Optimization problem
 =# ###################################
 
-function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=true)
+function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=false)
     # Get info #################################################################
     # Check if every tech was the same cost index lengths
  
@@ -323,6 +324,11 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=true
     @constraint(LP,highload[i=1:gammaN,t=1:timeN],gamma_size[i]*techs[i].loads[2]>=gammas[i,t])
     @constraint(LP,lowload[i=1:gammaN,t=1:timeN],gamma_size[i]*techs[i].loads[1]<=gammas[i,t])
 
+    # Use or not of a technology
+    @variable(LP, gamma_use[1:gammaN],Bin)
+    @constraint(LP, useProcess[i=1:gammaN], gamma_size[i] <= gamma_use[i]*1E6) # not the best way to solve this actually because sizes can be higher
+
+    # Ramping
     for i=1:length(techs)
         if techs[i].rate[1] != -1
             for t = 1:timeN-1
@@ -356,7 +362,7 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=true
     # Set objective function ###################################################
     # Define objective function
     if capex
-        @objective(LP,Max,sum(sum(resOUT[i,t]*valOUT[i,t]-resIN[i,t]*valIN[i,t] for i=1:resN) for t=1:timeN)-(sum(gamma_size[i]*techs[i].cost[valueIndex] for i=1:gammaN)+sum(gamma_size2[i]*problem.storage[i].cost[valueIndex] for i=1:storeN))*timeN)
+        @objective(LP,Max,sum(sum(resOUT[i,t]*valOUT[i,t]-resIN[i,t]*valIN[i,t] for i=1:resN) for t=1:timeN)-(sum(gamma_size[i]*techs[i].cost[1]+techs[i].cost[2]*gamma_use[i] for i=1:gammaN)+sum(gamma_size2[i]*problem.storage[i].cost[1]+problem.storage[2] for i=1:storeN))*timeN)
     else
         @objective(LP,Max,sum(sum(resOUT[i,t]*valOUT[i,t]-resIN[i,t]*valIN[i,t] for i=1:resN) for t=1:timeN))
     end
@@ -367,6 +373,8 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=true
     
     gamma_opt = [round(value(gammas[s,t]),sigdigits=5) for s=1:gammaN for t=1:timeN]
     gamma_opt = reshape(gamma_opt,(timeN,gammaN))
+
+    bin_use = [round(value(gamma_use[s]),sigdigits=5) for s=1:gammaN]
 
     store_opt = [round(value(store_level[s,t]),sigdigits=5) for s=1:storeN for t=1:timeN+1]
     store_opt = reshape(store_opt,(timeN+1,storeN))
@@ -443,12 +451,23 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=true
     return Problem(inputs_ans,processes_ans,outputs_ans,utils_ans,store_ans)
 end
 
+# Graph shortcuts
+vivi_graph(tech::Tech) = vivi_graph(tech.in,[tech],tech.out,[],[])
+vivi_graph(problem::Problem) = vivi_graph(problem.inputs,problem.processes,problem.outputs,problem.utilities,problem.storage)
+
+# Sankey shortcuts
+vivi_sankey(tech::Tech;time=1,valueIndex=0,heatExergy=false,showHeat=true) = vivi_sankey(tech.in,[tech],tech.out,[],[],time=time,valueIndex=valueIndex,heatExergy=heatExergy,showHeat=showHeat)
+vivi_sankey(problem::Problem;time=1,valueIndex=0,heatExergy=false,showHeat=true) = vivi_sankey(problem.inputs,problem.processes,problem.outputs,problem.utilities,problem.storage,time=time,valueIndex=valueIndex,heatExergy=heatExergy,showHeat=showHeat)
+
+# Graphs
+vivi_cc(problem::Problem) = vivi_plot(problem.processes,problem.utilities,"cc")
+vivi_cc(techs::Tech) = vivi_plot([techs],[],"cc")
+vivi_gcc(techs::Tech) = vivi_plot([techs],[],"gcc")
+
 #=
 vivi!(problem::Problem;valueIndex=1,Max=true,print=true)::Problem = vivi(problem;valueIndex=valueIndex,Max=Max,print=print,overwrite=true)
-
 # Shortcut to plots
-vivi_graph(tech::Tech) = vivi_graph(tech.in,[tech],tech.out,[])
-vivi_graph(problem::Problem) = vivi_graph(problem.inputs,problem.processes,problem.outputs,problem.utilities)
+# Shortcuts
 vivi_cc(t::Tech) = vivi_plot([t],[],"cc")
 vivi_gcc(t::Tech) = vivi_plot([t],[],"gcc")
 vivi_icc(p::Problem) = vivi_plot(p.processes,p.utilities,"icc")

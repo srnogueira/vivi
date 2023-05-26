@@ -206,7 +206,8 @@ function mer(stHX,utHot,utCold)
     TkN=length(Qk)
 
     # Define variables
-    mer=Model(GLPK.Optimizer)
+    mer=Model(HiGHS.Optimizer)
+    set_silent(mer)
     @variable(mer,hotUTs[i=1:hotN]>=0)
     @variable(mer,coldUTs[i=1:coldN]>=0)
     @variable(mer,R[i=1:TkN]>=0)

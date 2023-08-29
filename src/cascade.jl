@@ -7,12 +7,13 @@ mutable struct HeatStruct
     h::Float64
     Ts::Float64
     Tt::Float64
+    dtExtra::Float64
 end
 
 " Array of source shifted tempertures "
 function shiftSourceT(stArray,dt)
-    shiftHot(st)=st.Ts>st.Tt ? st.Ts-dt : st.Ts
-    return [shiftHot(stArray[i]) for i=1:length(stArray)]
+    shiftHot(st)=st.Ts>st.Tt ? st.Ts-dt-st.dtExtra : st.Ts+st.dtExtra
+    return [shiftHot(st) for st in stArray]
 end
 
 " Temperature interval array "
@@ -29,11 +30,11 @@ function tempInterval2(stArray,dt)
     i = 1
     for st in stArray
         if st.Ts>st.Tt
-            bar[i] = st.Ts-dt/2
-            bar[i+1] = st.Tt-dt/2
+            bar[i] = st.Ts-dt/2-st.dtExtra
+            bar[i+1] = st.Tt-dt/2-st.dtExtra
         else
-            bar[i] = st.Ts+dt/2
-            bar[i+1] = st.Tt+dt/2
+            bar[i] = st.Ts+dt/2+st.dtExtra
+            bar[i+1] = st.Tt+dt/2+st.dtExtra
         end
         i+=2
     end
@@ -88,22 +89,22 @@ function heatCascade(stHX,utHot,utCold;dt=15,forMILP=false,forplot=false,forLP=f
         if forplot
             if st.Tt<st.Ts
                 hot+=1
-                Tt=st.Tt-dt/2
-                Ts=st.Ts-dt/2
+                Tt=st.Tt-dt/2-st.dtExtra
+                Ts=st.Ts-dt/2-st.dtExtra
             else
                 cold+=1
-                Tt=st.Tt+dt/2
-                Ts=st.Ts+dt/2
+                Tt=st.Tt+dt/2+st.dtExtra
+                Ts=st.Ts+dt/2+st.dtExtra
             end
         else
             if st.Tt<st.Ts
                 hot+=1
-                Tt=st.Tt-dt
-                Ts=st.Ts-dt
+                Tt=st.Tt-dt-st.dtExtra
+                Ts=st.Ts-dt-st.dtExtra
             else
                 cold+=1
-                Tt=st.Tt
-                Ts=st.Ts
+                Tt=st.Tt+st.dtExtra
+                Ts=st.Ts+st.dtExtra
             end
         end
         for k=2:length(Tk) # interval: Tk[k-1]-Tk[k]
@@ -133,8 +134,8 @@ function heatCascade(stHX,utHot,utCold;dt=15,forMILP=false,forplot=false,forLP=f
     for st in utHot # for every stream
         hotId+=1
         for k=2:length(Tk) # interval: Tk[k-1]-Tk[k]
-            up = (st.Ts-dt>=Tk[k-1]) & (st.Tt-dt>=Tk[k-1])
-            down = (st.Ts-dt<=Tk[k]) & (st.Tt-dt<=Tk[k])
+            up = (st.Ts-dt-st.dtExtra>=Tk[k-1]) & (st.Tt-dt-st.dtExtra>=Tk[k-1])
+            down = (st.Ts-dt-st.dtExtra<=Tk[k]) & (st.Tt-dt-st.dtExtra<=Tk[k])
             if ~( up | down ) # not out
                 if (forplot)
                     locHot[k-1,hotId]=true
@@ -142,12 +143,12 @@ function heatCascade(stHX,utHot,utCold;dt=15,forMILP=false,forplot=false,forLP=f
                 end
                 if st.Tt<st.Ts
                     hot+=1
-                    Tt=st.Tt-dt
-                    Ts=st.Ts-dt
+                    Tt=st.Tt-dt-st.dtExtra
+                    Ts=st.Ts-dt-st.dtExtra
                 else
                     cold+=1
-                    Tt=st.Tt
-                    Ts=st.Ts
+                    Tt=st.Tt+st.dtExtra
+                    Ts=st.Ts+st.dtExtra
                 end
                 highT = Ts <= Tk[k-1] ? Ts : Tk[k-1]
                 lowT = Tt <= Tk[k] ? Tk[k] : Tt
@@ -161,8 +162,8 @@ function heatCascade(stHX,utHot,utCold;dt=15,forMILP=false,forplot=false,forLP=f
     for st in utCold # for every stream
         coldId+=1
         for k=2:length(Tk) # interval: Tk[k-1]-Tk[k]
-            up = (st.Ts>=Tk[k-1]) & (st.Tt>=Tk[k-1])
-            down = (st.Ts<=Tk[k]) & (st.Tt<=Tk[k])
+            up = (st.Ts+st.dtExtra>=Tk[k-1]) & (st.Tt+st.dtExtra>=Tk[k-1])
+            down = (st.Ts+st.dtExtra<=Tk[k]) & (st.Tt+st.dtExtra<=Tk[k])
             if ~( up | down ) # not out
                 if (forplot)
                     locCold[k-1,coldId]=true
@@ -170,12 +171,12 @@ function heatCascade(stHX,utHot,utCold;dt=15,forMILP=false,forplot=false,forLP=f
                 end
                 if st.Tt<st.Ts
                     hot+=1
-                    Tt=st.Tt-dt
-                    Ts=st.Ts-dt
+                    Tt=st.Tt-dt-st.dtExtra
+                    Ts=st.Ts-dt-st.dtExtra
                 else
                     cold+=1
-                    Tt=st.Tt
-                    Ts=st.Ts
+                    Tt=st.Tt+st.dtExtra
+                    Ts=st.Ts+st.dtExtra
                 end
                 highT = Tt <= Tk[k-1] ? Tt : Tk[k-1]
                 lowT = Ts <= Tk[k] ? Tk[k] : Ts

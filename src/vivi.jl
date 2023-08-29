@@ -76,13 +76,14 @@ end
 Problem(inputs,processes,outputs,utilities) = Problem(inputs,processes,outputs,utilities=utilities) # Legacy code compatibility
 
 # Heat
-Heat(h,Ts,Tt) = HeatStruct(h,Ts,Tt)
+Heat(h,Ts,Tt;dtExtra=0) = HeatStruct(h,Ts,Tt,dtExtra)
+HeatStruct(h,Ts,Tt) = HeatStruct(h,Ts,Tt,0) # Legacy code compatibility
 
 #= ###################################
 # Optimization problem
 =# ###################################
 
-function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=false)
+function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=false,dt=15)
     # Get info #################################################################
     # Check if every tech was the same cost index lengths
  
@@ -101,7 +102,7 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=fals
  
     # Heat cascade constraint ##################################################
     # Temperature intervals
-    Qk,locHot,locCold=heatCascade(t_q,[],[],forLP=true)
+    Qk,locHot,locCold=heatCascade(t_q,[],[],forLP=true,dt=dt)
 
     # Define problem
     if solver == "HiGHS"
@@ -143,8 +144,12 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=fals
         for k=1:TkN
             i = 1
             for b=1:gammaN
-                set_normalized_coefficient(con[k,t],gammas[b,t],-sum(Qk[k,i:lims[b]]))
-                i = lims[b]+1
+                if i<=lims[b] # Extra safety
+                    set_normalized_coefficient(con[k,t],gammas[b,t],-sum(Qk[k,i:lims[b]]))
+                    i = lims[b]+1
+                else
+                    set_normalized_coefficient(con[k,t],gammas[b,t],0)
+                end
             end
         end
     end
@@ -362,7 +367,8 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=fals
     # Set objective function ###################################################
     # Define objective function
     if capex
-        @objective(LP,Max,sum(sum(resOUT[i,t]*valOUT[i,t]-resIN[i,t]*valIN[i,t] for i=1:resN) for t=1:timeN)-(sum(gamma_size[i]*techs[i].cost[1]+techs[i].cost[2]*gamma_use[i] for i=1:gammaN)+sum(gamma_size2[i]*problem.storage[i].cost[1]+problem.storage[2] for i=1:storeN))*timeN)
+        @objective(LP,Max,sum(sum(resOUT[i,t]*valOUT[i,t]-resIN[i,t]*valIN[i,t] for i=1:resN) for t=1:timeN)-(sum(gamma_size[i]*techs[i].cost[1]+techs[i].cost[2]*gamma_use[i] for i=1:gammaN)+sum(gamma_size2[i]*problem.storage[i].cost[1] for i =1:storeN))*timeN)
+#         @objective(LP,Max,sum(sum(resOUT[i,t]*valOUT[i,t]-resIN[i,t]*valIN[i,t] for i=1:resN) for t=1:timeN)-(sum(gamma_size[i]*techs[i].cost[1] for i=1:gammaN)+sum(gamma_size2[i]*problem.storage[i].cost[1] for i =1:storeN))*timeN)
     else
         @objective(LP,Max,sum(sum(resOUT[i,t]*valOUT[i,t]-resIN[i,t]*valIN[i,t] for i=1:resN) for t=1:timeN))
     end
@@ -371,7 +377,7 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=fals
     optimize!(LP)
     print && println(solution_summary(LP))
     
-    gamma_opt = [round(value(gammas[s,t]),sigdigits=5) for s=1:gammaN for t=1:timeN]
+    gamma_opt = [value(gammas[s,t]) < 1E-3 ? 0 : value(gammas[s,t]) for s=1:gammaN for t=1:timeN]
     gamma_opt = reshape(gamma_opt,(timeN,gammaN))
 
     bin_use = [round(value(gamma_use[s]),sigdigits=5) for s=1:gammaN]

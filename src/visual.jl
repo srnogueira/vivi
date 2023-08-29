@@ -228,10 +228,16 @@ end
 
 function vivi_plot(techs,utils,type)
     # Preparation
-    techsN=length(techs)
     t_q=[]
-    allTechs = vcat(techs,utils)
-    for tech in allTechs
+    for tech in techs
+        aux = deepcopy(tech.heat) # required
+        for heat in aux
+            heat.h*=tech.size[1]
+        end
+        append!(t_q,aux)
+    end
+    techsTq = length(t_q)
+    for tech in utils
         aux = deepcopy(tech.heat) # required
         for heat in aux
             heat.h*=tech.size[1]
@@ -244,8 +250,8 @@ function vivi_plot(techs,utils,type)
     coldDummy = [HeatStruct(0.0,1.0,2.0)]
 
     if type == "icc"
-        merh,merc=mer(t_q[1:lims[techsN]],hotDummy,coldDummy)
-        plot = plot_icc(t_q,merh,merc,lims[techsN])
+        merh,merc=mer(t_q[1:techsTq],hotDummy,coldDummy)
+        plot = plot_icc(t_q,merh,merc,techsTq)
     elseif type == "cc"
         merh,merc=mer(t_q,hotDummy,coldDummy)
         plot=plot_cc(t_q,hotDummy,coldDummy,merh,merc)

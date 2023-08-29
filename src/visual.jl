@@ -228,23 +228,15 @@ end
 
 function vivi_plot(techs,utils,type)
     # Preparation
-    techsN = length(techs)
-    techs_all=vcat(techs,utils) # join techs and utils
-
-    # Join every heat transfer
-    t_q = deepcopy(techs_all[1].heat)
-    lims = [length(techs_all[1].heat)]
-    for i=2:length(techs_all)
-        t_q = vcat(t_q,deepcopy(techs_all[i].heat))
-        append!(lims,lims[i-1]+length(techs_all[i].heat))
-    end
-    
-    t = 1
-    for i=1:length(t_q)
-        if i > lims[t]
-            t += 1
+    techsN=length(techs)
+    t_q=[]
+    allTechs = vcat(techs,utils)
+    for tech in allTechs
+        aux = deepcopy(tech.heat) # required
+        for heat in aux
+            heat.h*=tech.size[1]
         end
-        t_q[i].h = t_q[i].h*techs_all[t].size[1] # has to be time
+        append!(t_q,aux)
     end
 
     # Calcuations

@@ -8,6 +8,7 @@ mutable struct HeatStruct
     Ts::Float64
     Tt::Float64
     dtExtra::Float64
+    loadEffect::Vector{Vector{Real}}
 end
 
 " Array of source shifted tempertures "

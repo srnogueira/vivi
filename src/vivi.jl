@@ -205,8 +205,8 @@ function get_linear_parameters(loads,points,max_segments)
             end
         end
     else
-        a[1] = 1
-        b[1] = 0
+        a .= 1
+        b .= 0
     end
     return a,b
 end

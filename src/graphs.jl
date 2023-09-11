@@ -157,7 +157,6 @@ function vivi_graph(inputs,techs,outputs,utils,store)
         )
     )
 end
-
 function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatExergy=false,showHeat=true)
     # Could be just a set
     vertex = Dict{String,Int64}()
@@ -202,21 +201,45 @@ function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatEx
     push!(names,"Heat network")
 
     # Connections
+    max_segments_per_tech,loads_lims_per_tech = segments_loads_per_tech(techs_all)
+
     connections = []
-    for tech in techs_all
+    for (τ,tech) in enumerate(techs_all)
+        size = maximum(tech.size)
+        load = tech.size[time]/size
+        loads = loads_lims_per_tech[τ]
+
         if tech.size[time] != 0
+            s = 1
+            while !(loads[s] <= load <=loads[s+1])
+                s+=1
+            end
+            
             for input in tech.in
                 i = vertex[input.type]
                 j = vertex[tech.type]
+                
+                a,b = get_linear_parameters(loads,input.loadEffect,max_segments_per_tech[τ])
                 index = length(input.amount) == 1 ? 1 : time # Amount or size?
-                qnt = valueIndex == 0 ? input.amount[index]*tech.size[time] : input.amount[index]*tech.size[time]*input.value[valueIndex]
+                qnt = input.amount[index]*(tech.size[time]*a[s]+b[s]*size)
+                if valueIndex != 0
+                    value = length(input.value[valueIndex]) == 1 ? input.value[valueIndex][1] : input.value[valueIndex][time]
+                    qnt*=value
+                end
                 append!(connections,[[i,j,qnt]])
             end
             for output in tech.out
                 i = vertex[tech.type]
                 j = vertex[output.type]
+
+                a,b = get_linear_parameters(loads,output.loadEffect,max_segments_per_tech[τ])
                 index = length(output.amount) == 1 ? 1 : time # Amount or size?
-                qnt = valueIndex == 0 ? output.amount[index]*tech.size[time] : output.amount[index]*tech.size[time]*output.value[valueIndex] # This does not work for grid costs
+                qnt = output.amount[index]*(tech.size[time]*a[s]+b[s]*size)
+                if valueIndex != 0
+                    value = length(output.value[valueIndex]) == 1 ? output.value[valueIndex][1] : output.value[valueIndex][time]
+                    qnt*=value
+                end
+                
                 append!(connections,[[i,j,qnt]])
             end
         end
@@ -225,15 +248,29 @@ function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatEx
     n_heat = length(connections)
     heatNetwork = false
     if showHeat
-        for tech in techs_all
+        for (τ,tech) in enumerate(techs_all)
+            
+            size = maximum(tech.size)
+            load = tech.size[time]/size
+            loads = loads_lims_per_tech[τ]
+
             if tech.size[time] != 0
+                s = 1
+                while !(loads[s] <= load <=loads[s+1])
+                    s+=1
+                end
+                
                 for heat in tech.heat
                     i = heat.Tt > heat.Ts ? count : vertex[tech.type]
                     j = heat.Tt > heat.Ts ? vertex[tech.type] : count
+
+                    a,b = get_linear_parameters(loads,heat.loadEffect,max_segments_per_tech[τ])
+                    heat = heat.h*(tech.size[time]*a[s]+b[s]*size)
+
                     if !heatExergy 
-                        qnt = heat.h*tech.size[time] # have a switch for exergy
+                        qnt = heat # have a switch for exergy
                     else
-                        qnt = heat.h*(1-298.15/(heat.Tt-heat.Ts)*log(heat.Tt/heat.Ts))*tech.size[time]
+                        qnt = heat*(1-298.15/(heat.Tt-heat.Ts)*log(heat.Tt/heat.Ts))
                     end
                     append!(connections,[[i,j,qnt]])
                     heatNetwork = true

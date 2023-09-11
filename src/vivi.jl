@@ -5,7 +5,6 @@ using Gurobi
 
 # Importing functions
 include("cascade.jl")   # Heat cascade
-include("visual.jl")    # Visualization
 
 #= ###################################
 # Code structures
@@ -40,7 +39,8 @@ function Resource(type,amount;unit=DEF_UNIT,value=DEF_VALUE,loadEffect=DEF_LOADE
     return Resource(type,amount,unit,value,loadEffect)
 end
 Resource(type::String,amount::Real;unit="",value=DEF_VALUE) = Resource(type,[amount],unit=unit,value=value)
-Resource(type::String,amount::Real,unit::String,value::Vector{Vector{Real}}) = Resource(type,amount,unit,value,[]) # Legacy code compatibility
+Resource(type::String,amount::Real,unit::String,value::Vector{Vector{Float64}}) = Resource(type,[amount],unit,value,[]) # Legacy code compatibility
+Resource(type::String,amount::Real,unit::String,value::Vector{Vector{Int64}}) = Resource(type,[amount],unit,value,[]) # Legacy code compatibility
 Resource(type::String,amount::Real,unit::String,value::Vector{Int64}) = Resource(type,[amount],unit,[[i] for i in value],[])   # Legacy code compatibility
 Resource(type::String,amount::Real,unit::String,value::Vector{Float64}) = Resource(type,[amount],unit,[[i] for i in value],[]) # Legacy code compatibility
 Resource(type::String,amount::Vector{Float64},unit::String,value::Vector{Vector{Int64}}) = Resource(type,amount,unit,value,[]) # Legacy code compatibility
@@ -771,6 +771,9 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=fals
     return Problem(inputs_ans,processes_ans,outputs_ans,utils_ans,store_ans)
 end
 
+# Visualization
+include("visual.jl")    # Visualization
+
 # Graph shortcuts
 vivi_graph(tech::Tech) = vivi_graph(tech.in,[tech],tech.out,[],[])
 vivi_graph(problem::Problem) = vivi_graph(problem.inputs,problem.processes,problem.outputs,problem.utilities,problem.storage)
@@ -780,7 +783,6 @@ vivi_sankey(tech::Tech;time=1,valueIndex=0,heatExergy=false,showHeat=true) = viv
 vivi_sankey(problem::Problem;time=1,valueIndex=0,heatExergy=false,showHeat=true) = vivi_sankey(problem.inputs,problem.processes,problem.outputs,problem.utilities,problem.storage,time=time,valueIndex=valueIndex,heatExergy=heatExergy,showHeat=showHeat)
 
 # Graphs
-
 function vivi_plot(techs,utils,type;time=1)
     # Preparation
     t_q=[]
@@ -792,17 +794,19 @@ function vivi_plot(techs,utils,type;time=1)
         size = maximum(tech.size)
         load = tech.size[time]/size
         
-        loads = loads_lims_per_tech[τ]
-        index = 1
-        while !(loads[index] <= load <=loads[index+1])
-            index+=1
-        end
+        if load != 0
+            loads = loads_lims_per_tech[τ]
+            index = 1
+            while !(loads[index] <= load <=loads[index+1])
+                index+=1
+            end
 
-        for heat in aux
-            a,b = get_linear_parameters(loads,heat.loadEffect,max_segments_per_tech[τ])
-            heat.h*=tech.size[time]*a[index]+b[index]*size
+            for heat in aux
+                a,b = get_linear_parameters(loads,heat.loadEffect,max_segments_per_tech[τ])
+                heat.h*=tech.size[time]*a[index]+b[index]*size
+            end
+            append!(t_q,aux)
         end
-        append!(t_q,aux)
     end
     techsTq = length(t_q)
 
@@ -813,17 +817,19 @@ function vivi_plot(techs,utils,type;time=1)
         size = maximum(tech.size)
         load = tech.size[time]/size
         
-        loads = loads_lims_per_tech[τ]
-        index = 1
-        while !(loads[index] <= load <=loads[index+1])
-            index+=1
-        end
+        if load !=0
+            loads = loads_lims_per_tech[τ]
+            index = 1
+            while !(loads[index] <= load <=loads[index+1])
+                index+=1
+            end
 
-        for heat in aux
-            a,b = get_linear_parameters(loads,heat.loadEffect,max_segments_per_tech[τ])
-            heat.h*=tech.size[time]*a[index]+b[index]*size
+            for heat in aux
+                a,b = get_linear_parameters(loads,heat.loadEffect,max_segments_per_tech[τ])
+                heat.h*=tech.size[time]*a[index]+b[index]*size
+            end
+            append!(t_q,aux)
         end
-        append!(t_q,aux)
     end
 
     # Calcuations

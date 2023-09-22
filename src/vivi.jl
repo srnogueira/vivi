@@ -794,7 +794,7 @@ function vivi_plot(techs,utils,type;time=1)
         size = maximum(tech.size)
         load = tech.size[time]/size
         
-        if load != 0
+        if size !=0 && load !=0
             loads = loads_lims_per_tech[τ]
             index = 1
             while !(loads[index] <= load <=loads[index+1])
@@ -816,8 +816,7 @@ function vivi_plot(techs,utils,type;time=1)
 
         size = maximum(tech.size)
         load = tech.size[time]/size
-        
-        if load !=0
+        if size !=0 && load !=0
             loads = loads_lims_per_tech[τ]
             index = 1
             while !(loads[index] <= load <=loads[index+1])

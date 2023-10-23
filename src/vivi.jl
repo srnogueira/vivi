@@ -611,7 +611,8 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=fals
     if n_store >= 1
         @constraint(model,[i=1:n_store,t=1:n_time+1],f_t[n_techs+i,t]<=problem.storage[i].limits[2])
         @constraint(model,[i=1:n_store,t=1:n_time+1],f_t[n_techs+i,t]>=problem.storage[i].limits[1])
-        @constraint(model,[i=1:n_store],f_t[n_techs+i,1] == problem.storage[i].amount)
+        @constraint(model,[i=1:n_store],f_t[n_techs+i,1] == f[n_techs+i]*problem.storage[i].amount)
+        @constraint(model,[i=1:n_store],f_t[n_techs+i,n_time+1] == f[n_techs+i]*problem.storage[i].amount)
         @constraint(model,size2[i=1:n_store,t=1:n_time+1],f[n_techs+i]>=f_t[n_techs+i,t]) # It should be higher or equal to the highest load
     end
 

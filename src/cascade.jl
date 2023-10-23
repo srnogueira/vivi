@@ -241,8 +241,8 @@ function mer(stHX,utHot,utCold)
     optimize!(mer)
 
     # Return optimal values
-    merHot=[value(hotUTs[hot])*(utHot[hot].Ts-utHot[hot].Tt) for hot=1:hotN]
-    merCold=[value(coldUTs[cold])*(utCold[cold].Tt-utCold[cold].Ts) for cold=1:coldN]
+    merHot=[abs(value(hotUTs[hot])*(utHot[hot].Ts-utHot[hot].Tt)) for hot=1:hotN]
+    merCold=[abs(value(coldUTs[cold])*(utCold[cold].Tt-utCold[cold].Ts)) for cold=1:coldN]
 
     return merHot,merCold
 end

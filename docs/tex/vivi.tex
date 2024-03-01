@@ -1,0 +1,587 @@
+\documentclass[10pt,twoside,a4paper]{report}
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage{amsmath}
+
+\begin{document}
+\title{vivi: documentation}
+\author{Rafael Nogueira Nakashima}
+\date{August 2023}
+
+%\frontmatter
+\maketitle
+
+%\mainmatter
+
+\chapter{The steady-state problem}
+
+Define the problem in steady-state conditions
+
+\chapter{The multi-period problem}
+
+Define the problem in multi-period formulation
+
+\chapter{The optimization problem}
+
+This chapter structured as:
+\begin{enumerate}
+\item Objective function
+\item Heat cascade constraints
+\item Other constraints
+\end{enumerate}
+
+\section{The objective function}
+For economic analysis, the net present value is choosen as the
+objective function to be maximized by the optimization. Since this
+tool is not aimed to do a precise economic analysis of chemical
+processes, but rather provide some quick estimates for optimization, a
+number of simplifications for the economic analysis are proposed:
+
+\begin{itemize}
+\item No land cost.
+\item No working capital.
+\item No salvage.
+\item No taxes and depreciation.
+\item No startup time.
+\item No degradation (Yearly production/efficiency does not alter along the years of project).
+\item No additional costs of manufacturing besides resources inputs.
+  % \item Full production after construction period (startup).
+  % \item Yearly production/efficiency does not alter along the years of project.
+\end{itemize}
+
+Under these assumptions the net present value (NPV) of a chemical process
+can be written as Eq. (\ref{eq:npv}):
+\begin{equation}
+  \label{eq:npv}
+  % NPV = (R+L+O)\beta_{p/a}\beta_{p/f,s} + \sum_n^{n_t}C_{n}\beta_{p/f,n} % Old formulation, more complicated
+  NPV = C_{r}\beta_{p/a} + \sum_{n=0}^{n_t}C_{n}\beta_{p/f,n} % New, simpler and inline with literature
+\end{equation}
+
+\begin{tabular}[h]{ll}
+  NPV & Net present value, USD\\
+  $C_{r}$ & Resource cost balance, USD/y\\
+  %L & Direct labor costs, USD/y\\
+  %O & Other operating expenses, USD/y\\
+  $\beta_{p/a} $& Present value of an annuity, y\\
+  %$\beta_{p/f,s} $& Single payment present value factor (startup year), -\\
+  $\beta_{p/f,n} $& Single payment present value factor (year ``n''), -\\
+  $C_{n}$ & Capital investment on year ``n'', USD/y \\
+  $n_t$ & Total project years, y \\
+  \\
+\end{tabular}
+
+\begin{equation}
+  \beta_{p/a} = \frac{(1+i)^{n_t}-1}{i(1+i)^{n_t}}
+\end{equation}
+
+\begin{equation}
+  \beta_{p/f,n} = \frac{1}{(1+i)^n}
+\end{equation}
+
+
+The resources produced or consumed by each technology (as well as the
+ones defined in the boundary conditions) may vary by hour, as denoted
+in Eq. (\ref{eq:var}). In most of the cases, average rates can be assumed for the
+system, which can be multiplied by the operating hours in a year
+(Eq. \ref{eq:var2}).
+
+\begin{equation}
+  \label{eq:var}
+  C_{r} = \sum_t^{t_t}\sum_i^{i_t}(r^{out}_{i,t}c_{i,t}^{out}-r^{in}_{i,t}c_{i,t}^{in})
+\end{equation}
+
+\begin{equation}
+  \label{eq:var2}
+  C_{r} = \sum_i^{i_t}(r^{out}_ic_i^{out}-r^{in}_ic_i^{in})t_{op}
+\end{equation}
+
+\begin{tabular}[h]{ll}
+  $r_{i,t}^{out}$,$r_{i,t}^{in}$ & Output or input rate of resource ``i'' at time ``t'', ex: kg/h.\\
+  $c_{i,t}^{out}$,$c_{i,t}^{in}$ & Output or input specific cost of resource ``i'' at time ``t'', ex: USD/kg.\\
+  $t_{op}$ & Operating hours in a year, h/y.\\
+  \\
+\end{tabular}
+
+
+%Direct labor costs (L) are estimated based on the number of operators
+%per shift ($N_{OL}$) and the yearly salary of an operator ($C_{OL}$),
+%as proposed by Turton, et. al [REF]:
+
+%\begin{equation}
+%  \label{eq:labor}
+%  L = 4.5 (N_{OL}C_{OL})
+%\end{equation}
+
+Capital investments for each year ($C_i$) are estimated from the fixed
+capital investment of each technology ($C_{FCI}^\tau$) and additional
+costs related to the heat exchanger network ($C_{HXs}^\tau$). In the
+proposed Eq. (\ref{eq:capital}), the alpha factor refers to the
+percentage of the FCI which is expended on a given year for the
+replacement of certain components (e.g., catalysts). The fixed capital
+investment of every unit should be estimated by the user, with the
+exception of the heat exchanger network ($C_{HXs}^\tau$), which can be
+estimated by vivi (Subsection X).
+
+\begin{equation}
+  \label{eq:capital}
+  C_i =
+  \begin{cases}
+    \sum_\tau^{\tau_n} (C_{FCI}^\tau+C_{HXs}^\tau) &\text{if $n=0$}\\
+    \sum_\tau^{\tau_n} (C_{FCI}^\tau\alpha_{i}^\tau) &\text{otherwise}
+  \end{cases}
+\end{equation}
+
+\begin{tabular}[h]{ll}
+  $C_{FCI}^\tau$ & Fixed capital investment (FCI) of technology ``$\tau$'', USD\\
+  $C_{HXs}^\tau $ & Fixed capital investment of heat exchangers required for integration, USD \\
+  $\alpha_i^\tau$ & Percentage of FCI of technology ``$\tau$'' reinvested in year ``i'', USD\\
+  \\
+\end{tabular}
+
+%\begin{equation}
+%  \label{eq:capital}
+%  f(n) = \begin{cases}
+%    n/2       & \text{if } n \text{ is even}\\
+%    -(n+1)/2  & \text{if } n \text{ is odd}
+%  \end{cases}
+  
+  % if 0 , then is FCI + HXs
+  % if not, then it is a portion of the FCI.
+
+%\end{equation}
+
+% Here there is a problem, which cost correlation should be assumed for the HXs?
+% Also, there may be instances where the heat exchangers are different or multiple equations may be necessary.
+% Here the heat exchanger function is non-linear, therefore a subroutine to linearize would also be necessary.
+% Possible problems in the definition of alpha including or excluding the HXs.
+
+%Other manufacturing costs are assumed to be proportional to resources,
+%labor and capital investments, as described in Eq. (\ref{eq:fix}):
+
+%\begin{equation}
+%  \label{eq:fix}
+%  O = R\cdot f_{COM,R}+L\cdot f_{COM,L}+\sum_\tau^{\tau_n}C_{FCI}^\tau\cdot f_{COM,FCI}
+%\end{equation}
+
+For non-economic problems, discount rate, labor, capital investments
+and other operating expenses can be set to zero. The objective
+function then becomes the net balance of resources (R), which can be
+set to a common energy/exergy basis by using the appropriated specific
+costs.
+
+% Default values for vivi
+
+\subsection{Piece-wise linearization of capital investments}
+% Give points and the software will assume linear between them
+
+Specific equipment costs usually reduce with larger sizes, a concept
+commonly refered as ``economy of scale'' [Turton]. As a consequence,
+the capital investment of a process plant follows a non-linear
+relationship with size. Thus, in order to include the capital
+investments in a linear optimization problem, as proposed in vivi, it
+is necessary to create a linear approximation of the ``economy of
+scale'' for every technology.
+
+% Why to force the problem to be a linear one? Integration with scheduling problems.
+
+There are two main shortcommings in this approach: (1) the precision
+of the cost approximation (2) the inclusion of binary variables in the
+problem. Both problem can be minimized by carefully choosing the
+smallest number of regions and/or limiting the search space. It is
+important to highlight that the uncertainties in the CAPEX estimates
+are usually much higher than the losses in precision by the
+linearization.
+
+% How would one write it in the optmization problem? Ex. Voll
+
+\begin{equation}
+  \label{eq:costLin}
+  C_{FCI}^\tau = \sum_s^S(f_s^\tau a_s + y_s^\tau b_s)
+\end{equation}
+
+\begin{equation}
+  \label{eq:costLin2}
+  f_{s,min}y_s \leq f_s^\tau \leq f_{s,max}y_s
+\end{equation}
+
+\begin{equation}
+  \label{eq:costLin3}
+  f^\tau = \sum_s^S f_s^\tau
+\end{equation}
+
+\begin{equation}
+  \label{eq:costLin4}
+  \sum y_s^\tau \leq 1
+\end{equation}
+\begin{tabular}[h]{ll}
+  $f_s^\tau$ & Size factor of technology ``$\tau$'' at segment ``s'' (continuous variable), -\\
+  $a_s$ & Slope constant of linearization in segment ``s'', - \\
+  $y_s$ & Binary variable associated with segment ``s'', - \\
+  $b_s$ & Intercept constant of linearization in segment ``s'', - \\
+  $f_{s,min}^\tau$ & Minimal size factor of technology ``$\tau$'' at segment ``s'' (continuous variable), -\\
+  $f_{s,max}^\tau$ & Maximum size factor of technology ``$\tau$'' at segment ``s'' (continuous variable), -\\
+  $f^\tau$ & Size factor of technology ``$\tau$'', -\\
+  \\
+\end{tabular}
+
+
+\subsubsection{Getting linear parameters from data points}
+This can be achieved by separating the search space into regions in
+which the costs can be approximated as linearly proportional to the
+size factors. For instance, given two data points (f,C) for size and
+costs, a linear representation between them (segment ``s'') can be
+written as:
+
+\begin{equation}
+  \label{eq:a}
+  a_s=\frac{C_{i+1}-C_i}{f_{i+1}-f_i}
+\end{equation}
+
+\begin{equation}
+  \label{eq:b}
+  b_s=C_{i+1}-a_sf_{i+1}
+\end{equation}
+
+So for the segment ``s'' [$f_i$,$f_{i+1}$] the linear approximation
+is given by:
+
+\begin{equation}
+  \label{eq:linear}
+  C = a_sf+b_s
+\end{equation}
+
+
+\subsection{Estimation of heat exchanger costs}
+% For every point given in the techs costs, calculate the heat exchanger costs and add to the value
+
+There are a number of methods to estimate the cost of heat exchangers
+and most of them rely on defining the pairs of hot and cold stream of
+each equipment. In energy integration problems, the heat transfer
+pairs are usually not defined in order to not restrict the
+optimization problem. This imposes a challenge in economic
+optimization, since CAPEX and OPEX are directly connected with the
+heat exchanger costs and energy integration, respectively.
+
+The approach proposed here is to estimate the heat exchanger costs by
+costing every heat stream separately, based on the equivalent area
+required to transfer heat at the global minimal temperature approach
+(plus extra individual contributions):
+
+\begin{equation}
+  \label{eq:hx_cost}
+  C_{HXs}^\tau = \sum_i C_{HX,i}^\tau = \sum_i F(A_{HX,i}) 
+\end{equation}
+
+\begin{equation}
+  \label{eq:area}
+  A_{HX,i} = \frac{1}{\Delta T_{min}+\Delta T_{extra}} \left ( \frac{Q_if^\tau}{h_i} \right )
+\end{equation}
+
+\begin{tabular}[h]{ll}
+  $F()$ & Heat exchanger cost function, N/A\\
+  $C_{HX,i}^\tau$ & FCI related to a heat stream ``i'' of technology ``$\tau$'', USD \\
+  $A_{HX,i}^\tau$ & Heat exchanger area related to a heat stream ``i'' of technology ``$\tau$'', $m^2$ \\
+  $\Delta T_{min}$ & Minimal temperature approach for heat transfer, K\\
+  $\Delta T_{extra}$ & Extra temperature approach for heat transfer, K\\
+  $Q$ & Heat transfer rate, W \\
+  $h$ & Individual heat transfer film coefficient, $\frac{W}{m^2K}$ \\
+  \\
+\end{tabular}
+
+This method is simple, systematic and captures the trade-offs between
+CAPEX and OPEX of heat exchanger networks. However, it is also prone
+to overestimate the costs, since heat transfer is rarely done at the
+exact pinch temperature and the number of heat exchangers is doubled.
+
+\subsubsection{Heat exchanger cost function}
+
+To do (from book)
+
+\section{Heat cascade constraints}
+
+Each technology may have heat demands and/or requirements associated
+with it. These heat transfers may be provided from other technologies
+or by utilities, such as burners, cooling towers, among others. It is
+important to size the technologies and utilities such as all energy
+requirements are satified in the most efficient way.
+
+Thus, pinch analysis is used to assess and size the technologies and
+utilities in a process plants:
+
+\begin{equation}
+  \label{eq:pinch_1}
+  R_{k-1,t}+\sum_\tau^{\tau_n}\sum_i Q_{i,k,t}^\tau = R_{k,t} \quad \forall k \in [1,...,K], \quad \forall t
+\end{equation}
+
+% This representation is actually for the case in which the non-discrete linearization.
+% An alternative here is to express as Q_{i,k,t} and explain separately how one can solve this.
+% Also a simplified version of the problem.
+
+\begin{equation}
+  \label{eq:pinch_2}
+  R_{k,t}
+  \begin{cases}
+     = 0 & \text{if $k=0,K$}\\
+    \geq 0 & \text{otherwise} \\
+  \end{cases}
+\end{equation}
+
+\begin{tabular}[h]{ll}
+  $R_k$ & Residual heat transfer of temperature interval ``k'', W\\
+  $Q_{i,k,t}^\tau$ & Heat transfer of stream ``i'' at temperature interval ``k'' and time ``t'' from technology ``$\tau$'', W\\
+  \\
+\end{tabular}
+
+It is important to note that this formulation of the heat cascade
+constraint assumes that the temperatures (source, target) remain
+constant under different loads of technology ``$\tau$''. In most cases
+this is not the case, therefore this assumption should be taken
+carefully.
+
+Modular simplication
+\begin{equation}
+  Q_{i,k,t} = f^\tau_t Q_{i,k}^\tau
+\end{equation}
+
+Steady-state simplification
+\begin{equation}
+  Q_{i,k,t} = Q_{i,k}^\tau
+\end{equation}
+
+
+% \subsubsection{A possible alternative}
+
+% \begin{itemize}
+% \item Identify the fixed and variable heat streams.
+% \item Fix the temperature intervals such as they represent the same
+%   problem or a slighly worst version of it, but essentially that have
+%   constant temperature intervals.
+% \item Use piece-wise linearization to describe the variation of heat
+%   at those intervals with load, similar to done with product
+%   efficiency.
+% \item Hope that the number of variables does not make the solution
+%   infeasible to calculate. (this could be a parameter to change as
+%   they do with mesh).
+% \end{itemize}
+
+\subsubsection{Determining temperature intervals}
+
+There are different ways to determine the temperature intervals of a
+pinch problem. In vivi, the rules proposed by Grimes [X] as described
+by Papoulias and Grossmann [X] are slighly modified to include the
+possibility of extra individual temperature contributions
+($\Delta T_{extra}$). The proposed method is:
+
+\begin{enumerate}
+\item Subtract $\Delta T_{min}$ from all hot streams temperatures;
+\item Subtract $\Delta T_{extra}$ from all hot streams temperatures;
+\item Add $\Delta T_{extra} $ to all cold streams temperatures;
+\item Place all supply temperatures in a decreasing order list;
+\item Number the temperature intervals in increasing order
+  (k=1, 2, ..., K) from each sequence of temperature pairs.
+\end{enumerate}
+
+% It is important to notice that this method is different from Klemes,
+% since it only uses the source temperatures.
+
+% Not completely sure it that is right.
+
+%The method is analogous to the temperature contribution approach
+%described by Klemes [X]. However, the temperature contribution method
+%turns more difficult to estimate the heat transfer area, since the
+%minimal temperature approach is dependent on two heat streams in that
+%method.
+
+\subsubsection{Determining  $Q_{i,k}^\tau$}
+The heat transfer associated with stream ``i'' at the temperature
+interval ``k'' can be determined by comparing the shifted temperatures
+with the temperature interval pair. Here we refer to the lowest
+temperature in the interval as $T_k^{low}$, while the highest
+temperature is refered as $T_k^{high}$.
+
+If both shifted temperatures are below $T_k^{min}$ or above
+$T_k^{high}$, then $Q_{i,k}$ is null. Otherwise, the heat transfered
+in the temperature interval can be calculated by the heat capacity of
+the stream ($Cp_i$) and its temperature variation inside the
+temperature interval.
+
+\begin{equation}
+  \label{eq:heat}
+  Q_{k,i}=Cp_i(T_{i,k}^{high}-T_{i,k}^{low})
+\end{equation}
+
+\begin{equation}
+  \label{eq:t_high}
+  T_{i,k}^{high} =
+  \begin{cases}
+    \min(T_{s,i},T_k^{high}) & \text{if "i" is a hot stream}\\
+    \min(T_{t,i},T_k^{high}) & \text{otherwise}\\
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+  \label{eq:t_low}
+  T_{i,k}^{low} =
+  \begin{cases}
+    \max(T_{t,i},T_k^{low}) & \text{if "i" is a hot stream}\\
+    \min(T_{s,i},T_k^{low}) & \text{otherwise}\\
+  \end{cases}
+\end{equation}
+
+% Figure from thesis can help
+
+\section{Resources balance constraints}
+
+Resources balance 
+\begin{equation}
+  \label{eq:resources}
+  r_{i,t}^{in}+S_{t-1}+\sum_\kappa^{\kappa_n} (r_{i,t}^{\kappa,in}-r_{i,t}^{\kappa,out}) = r_{i,t}^{out}+S_t
+\end{equation}
+
+% Important: t refers to the end of the hour. Ex: end of first our.
+
+A simplified version is:
+\begin{equation}
+  \label{eq:resources}
+  r_{i}^{in}+\sum_\kappa^{\kappa_n} f^\kappa(r_{i}^{\kappa,in}-r_{i}^{\kappa,out}) = r_{i}^{out}
+\end{equation}
+
+
+
+
+Explain the numerous variables
+
+Explain the storage variables
+\begin{equation}
+  S_{t-1} = \sum_\sigma^{\sigma_n}s_{i,t-1}^\sigma\eta_i^\sigma
+\end{equation}
+%(eta only models the self discharge)
+
+
+\begin{equation}
+  S_{t} = \sum_\sigma^{\sigma_n}s_{i,t}^\sigma
+\end{equation}
+\begin{equation}
+  s_{i,t}^\sigma \leq f^\sigma
+\end{equation}
+% f_sigma assumes that the storage capacity does not change with time, which may happen
+
+
+Explain the approximations possible for r's (simple or piece-wise)
+
+\subsection{Modular approximation}
+\begin{equation}
+  r_t = f_t^\tau r_i
+\end{equation}
+
+\begin{equation}
+  l_{min}f^\tau \leq f_t^\tau \leq l_{max}f^\tau 
+\end{equation}
+
+\subsection{Reformulation strategy}
+(The same strategy would be necessary for heat)
+
+
+For only one segment (Voll):
+\begin{equation}
+  r_t = \xi_t b_s + f_t a_s 
+\end{equation}
+
+\begin{equation}
+  \xi_t l_{min} \leq f_t \leq \xi_t l_{max}
+\end{equation}
+
+\begin{equation}
+  \delta_t f_{min} \leq \xi_t \leq \delta_t f_{max} 
+\end{equation}
+
+\begin{equation}
+  (1-\delta_t)f_{min} \leq \Psi_t - \xi_t \leq (1-\delta_t)f_{max}
+\end{equation}
+
+\begin{equation}
+  \Psi_t = f \quad \forall t
+\end{equation}
+\begin{equation}
+  \xi_t \equiv  \delta_t f 
+\end{equation}
+
+
+For multiple segments (Li):
+
+\begin{equation}
+  r_t = \sum_s \left ( \xi_{t,s} b_s + f_{t,s} a_s \right ) 
+\end{equation}
+
+\begin{equation}
+  \xi_{t,s} l_{s,min} \leq f_{t,s} \leq \xi_{t,s} l_{s,max}
+\end{equation}
+
+\begin{equation}
+  \delta_{t,s} f_{min} \leq \xi_{t,s} \leq \delta_{t,s} f_{max} 
+\end{equation}
+
+\begin{equation}
+  (1-\delta_{t,s})f_{min} \leq \Psi_{t} - \xi_{t,s} \leq (1-\delta_{t,s})f_{max}
+\end{equation}
+
+\begin{equation}
+  \Psi_{t} = f \quad \forall t
+\end{equation}
+
+\begin{equation}
+  \sum_s \delta_{t,s} \leq 1 \quad \forall t
+\end{equation}
+
+\begin{equation}
+  \xi_{t,s} \equiv  \delta_{t,s} f 
+\end{equation}
+
+% Formulation given by Voll can be used here to derive the partial load operation of a certain resource.
+
+\section{Other constraints}
+
+\subsection{Boundary conditions}
+Boundary conditions are the resource availability or demand for a certain time or period:
+
+\begin{equation}
+  r_{i,t} = r_{cte}
+\end{equation}
+
+\begin{equation}
+  \sum_t r_{i,t} = r_{cte}
+\end{equation}
+
+\subsection{Ramping}
+A common constraint in problems is the ramping limit of a certain
+technology:
+
+\begin{equation}
+  \Delta_{down} f \leq f_t-f_{t-1} \leq \Delta_{up} f
+\end{equation}
+
+% Technology sizes are already included in the formulation of
+% piece-wise linearization of costs or resource balances.
+
+% What about startup and shutdown? Or other operating mode?
+% - Is not much the goal to have a precise model, but to analyze the integration possibilities.
+
+\subsection{No turnoff}
+Changes constraint about the sum of binaries.
+
+\section{Summary}
+
+Show the whole optimization problem with all variables in the general sense for vivi
+
+
+% DELETED
+
+%\begin{equation}
+%  \label{eq:fci}
+%  C_{FCI}^\tau = (\alpha_{cont.}+\alpha_{fee})\sum_j C_{BM,j} + \alpha_{aux}\sum_j C_{BM,j}^0
+%\end{equation}
+% And this part here is the one which is linearized (which also have some problems, because it loses information)
+%\appendix
+%\backmatter
+
+
+\end{document}

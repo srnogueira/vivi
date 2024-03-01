@@ -260,9 +260,9 @@ function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatEx
                     s+=1
                 end
                 
+                qnt_in = 0
+                qnt_out = 0
                 for heat in tech.heat
-                    i = heat.Tt > heat.Ts ? count : vertex[tech.type]
-                    j = heat.Tt > heat.Ts ? vertex[tech.type] : count
 
                     a,b = get_linear_parameters(loads,heat.loadEffect,max_segments_per_tech[τ])
                     heat_flow = heat.h*(tech.size[time]*a[s]+b[s]*size)
@@ -272,9 +272,17 @@ function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatEx
                     else
                         qnt = heat_flow*(1-298.15/(heat.Tt-heat.Ts)*log(heat.Tt/heat.Ts))
                     end
-                    append!(connections,[[i,j,qnt]])
+
+                    if heat.Tt > heat.Ts
+                        qnt_in += qnt
+                    else
+                        qnt_out += qnt
+                    end
                     heatNetwork = true
                 end
+                append!(connections,[[count,vertex[tech.type],qnt_in]])
+                append!(connections,[[vertex[tech.type],count,qnt_out]])
+                    
             end
         end
     end

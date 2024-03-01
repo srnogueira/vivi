@@ -173,6 +173,20 @@ function create_capex_exp!(model,techs;valueIndex=1)
 end
 
 """
+create_capex_simple!(model,techs;valueIndex=1)
+"""
+function create_capex_simple!(model,techs;valueIndex=1)
+    # Check number of segments for each Tech
+    n_techs = length(techs)
+
+    # Create continuous variable
+    add_tech_sizes!(model,techs)
+    f = model[:f]
+
+    @expression(model,capex,sum(f[τ]*techs[τ].cost[valueIndex][end][2]/techs[τ].cost[valueIndex][end][1] for τ= 1:n_techs))
+end
+
+"""
 get_linear_parameters(loads,points,max_segments)
 
 returns the slope and intersection parameters of each linear segment
@@ -402,6 +416,108 @@ function create_tech_reformulation!(model,techs,resources,n_time;dt=15)
 end
 
 """
+create_tech_simplified!(model,techs,resources)
+
+creates matrixes with the tech resources and heat expressions using the simplified strategy
+"""
+function create_tech_simplified!(model,techs,resources,n_time;dt=15)
+    # Find number of segments for each resource and heat of each tech
+    n_techs = length(techs)
+
+    # Create the variables - Reformulation strategy (f_ts are defined outside)
+    f = model[:f]
+    f_t = model[:f_t]
+    
+    @constraint(model,[t=1:n_time,τ=1:n_techs],f_t[τ,t] <= techs[τ].limits[2]) # It seems to be the total limits and not the segments
+    @constraint(model,[t=1:n_time,τ=1:n_techs],f_t[τ,t] >= techs[τ].limits[1]) # It seems to be the total limits and not the segments
+    @constraint(model,[t=1:n_time,τ=1:n_techs],f_t[τ,t] <= f[τ]*techs[τ].loads[2]) # It seems to be the total limits and not the segments
+    @constraint(model,[t=1:n_time,τ=1:n_techs],f_t[τ,t] >= f[τ]*techs[τ].loads[1]) # It seems to be the total limits and not the segments
+
+
+    # Mass contributions
+    n_resources = length(resources)
+    
+    r_ts = Matrix{Any}(undef,n_resources,n_time)
+    for i=1:n_resources
+        for t=1:n_time
+            r_ts[i,t] = @expression(model,0)
+        end
+    end
+
+    # Probably more efficient to loop for each Tech, also should not repeat itself
+    r = 0 # A bit dangerous
+    for resource in resources
+        r += 1
+        for τ in eachindex(techs)
+            tech = techs[τ]
+
+            for i in eachindex(tech.in)
+                inlet = tech.in[i]
+                if inlet.type == resource
+
+                    # Add resource balance
+                    for t = 1:n_time
+                        if length(inlet.amount) == 1 # Maybe it does not make so much sense
+                            r_ts[r,t] = @expression(model,r_ts[r,t]-inlet.amount[1]*f_t[τ,t])
+                        else
+                            r_ts[r,t] = @expression(model,r_ts[r,t]-inlet.amount[t]*f_t[τ,t])
+                        end
+                    end
+                end
+            end
+
+            for o in eachindex(tech.out)
+                outlet = tech.out[o]
+                if outlet.type == resource
+                    
+                    # Add resource balance
+                    for t = 1:n_time
+                        if length(outlet.amount) == 1 # Maybe it does not make so much sense
+                            r_ts[r,t] = @expression(model,r_ts[r,t]+outlet.amount[1]*f_t[τ,t])
+                        else
+                            r_ts[r,t] = @expression(model,r_ts[r,t]+outlet.amount[t]*f_t[τ,t])
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    # Heats
+    heats = []
+    for tech in techs
+        heats = vcat(heats,tech.heat)
+    end
+    if !isempty(heats)
+        Qk,locHot,locCold=heatCascade(heats,[],[],forLP=true,dt=dt)
+        n_Tk=length(Qk[:,1])
+    else
+        Qk = []
+        n_Tk = 0
+    end  
+
+    # Create container
+    q_kt = Matrix{Any}(undef,n_Tk,n_time)
+    q_kt .= @expression(model,0)
+ 
+    # Iterate
+    start = 0
+    for (τ,tech) in enumerate(techs)
+        for (h,heat) in enumerate(tech.heat)
+            Qki = Qk[:,h+start]
+            for k=1:n_Tk
+                for t=1:n_time
+                    q_kt[k,t] = @expression(model,q_kt[k,t]-Qki[k]*f_t[τ,t])
+                end
+            end
+        end
+        start += length(tech.heat)
+    end
+
+    return r_ts,q_kt
+end
+
+"""
 add_ramping!(model,techs,n_time)
 
 add ramping constraints for the techs in the optimization model
@@ -448,6 +564,11 @@ function list_of_resources(problem::Problem)
     return collect(resources)
 end
 
+# Capacity factor
+function CRF(;dis=0.08,years=20,hours=8760/2,f_COM=0.09,inf=0.02,f_CAPEX=1)
+    i = (1+dis)/(1+inf)-1
+    return i*(1+i)^years/((1+i)^years-1)/hours+f_COM*f_CAPEX/hours
+end
 
 #= ###################################
 # Optimization problem
@@ -458,7 +579,7 @@ vivi(problem::Problem;valueIndex=1,print=true,solver=HiGHS.Optimizer,capex=false
 
 Creates and solves the optimization problem
 """
-function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=false,dt=15,tmax=3*60,returnModel=false)
+function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=false,dt=15,tmax=3*60,returnModel=false,CRF=CRF(),gap=false,LP=false)
     # Get info #################################################################
  
     # Join techs and utilities
@@ -473,6 +594,9 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=fals
     model = Model(solver)
     set_silent(model)
     set_time_limit_sec(model,tmax)
+    if gap
+        set_optimizer_attribute(model, "MIPGap", 0.01)
+    end
 
     # Define variables
     n_time=number_of_time_points(problem)
@@ -487,7 +611,11 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=fals
     # - change the indexes from τ to the tech types
 
     if capex
-        create_capex_exp!(model,vcat(techs,problem.storage),valueIndex=valueIndex)
+        if LP
+            create_capex_simple!(model,vcat(techs,problem.storage),valueIndex=valueIndex)
+        else
+            create_capex_exp!(model,vcat(techs,problem.storage),valueIndex=valueIndex)
+        end
     else
         add_tech_sizes!(model,vcat(techs,problem.storage))
     end
@@ -495,7 +623,11 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=fals
     @variable(model,f_t[τ=1:n_techs+n_store,t=1:n_time+1]>=0)
 
     # Reformulation strategy
-    r_ts,q_kt = create_tech_reformulation!(model,techs,resources,n_time,dt=dt) # heat expressions are also created here
+    if LP
+        r_ts,q_kt = create_tech_simplified!(model,techs,resources,n_time,dt=dt) # heat expressions are also created here
+    else
+        r_ts,q_kt = create_tech_reformulation!(model,techs,resources,n_time,dt=dt) # heat expressions are also created here
+    end
 
     # Resources constraints #######################################################
     # TODO:
@@ -668,7 +800,7 @@ function vivi(problem::Problem;valueIndex=1,print=true,solver="HiGHS",capex=fals
     cost_in = @expression(model,sum(sum(resIN[i,t]*valIN[i,t] for i=1:n_res if binary_inOut[i,1]==1) for t=1:n_time))
     if capex
         capex_exp = model[:capex]
-        @objective(model,Max,cost_out-cost_in-capex_exp*n_time)
+        @objective(model,Max,cost_out-cost_in-capex_exp*n_time*CRF)
     else
         cost_out
         @objective(model,Max,cost_out-cost_in)

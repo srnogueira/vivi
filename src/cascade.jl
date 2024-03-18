@@ -1,27 +1,7 @@
-using JuMP, HiGHS
+using JuMP
 using Plots, DelimitedFiles
 
-"""
-    Heat(h::Real,Ts::Real,Tt::Real,dT::Real,pw::Matrix{Real})::Heat
-    Heat stream representation
-
-    # Arguments:
-    - 'h' : Heat trasfer rate [kW]
-    - 'Ts' : Source temperature [K]
-    - 'Tt' : Target temperature [K]
-    - 'dT' : Minimal temperature difference contribution [K]
-    - 'pw' : Piece-wise linearization matrix [load_1 factor_1; load_2 factor_2]
-    - 'n' : name
-
-"""
-Base.@kwdef struct Heat
-    q::Real = 0.0
-    Ts::Real = 0.0
-    Tt::Real = 0.0
-    dT::Real = 7.5
-    pw::Matrix{Real} = [0 0;1 1]
-    n::String = "-"
-end
+include("struct.jl")
 
 """
     c_p(h::Heat)::Real
@@ -120,18 +100,19 @@ function separateHotCold(Qk_st::Matrix{Real})::Tuple{Matrix{Real},Matrix{Real}}
 end
 
 """
-    mer(streams::Vector{Heat})::Tuple{Real,Real}
+    mer(streams::Vector{Heat},solver::DataType)::Tuple{Real,Real}
     Minimal energy requirement for array of streams in (heating, cooling) format
 
     Arguments:
     - 'streams' : Array of heat streams
+    - 'solver' : Optimization solver
 """
-function mer(heats::Vector{Heat})::Tuple{Real,Real}
+function mer(heats::Vector{Heat},solver::DataType)::Tuple{Real,Real}
     Qk = vec(sum(heatCascade(heats),dims=2)) 
     K=length(Qk)
 
     # Define variables
-    mer=Model(HiGHS.Optimizer)
+    mer=Model(solver)
     set_silent(mer)
     @variable(mer,hotUT>=0)
     @variable(mer,coldUT>=0)
@@ -194,39 +175,36 @@ end
     Arguments:
     - 'heats' : Vector of heats
     - 'save' : Option to save values in a csv file
+    - 'solver' : Optimization solver
 """
-function plot_cc(heats::Vector{Heat};save::Bool=false)
+function plot_cc(heats::Vector{Heat},solver::DataType;save::Bool=false)
 
     Tk = tempInterval(heats)
     Qk_st = heatCascade(heats)
     Qk_hot,Qk_cold = separateHotCold(Qk_st)
-    merh,merc = mer(heats)
+    merh,merc = mer(heats,solver)
 
     cold_cc=vec(sum(Qk_cold,dims=2)) # into vector
     push!(cold_cc,0.0)
-
     hot_cc=vec(sum(Qk_hot,dims=2))
     push!(hot_cc,0.0)
 
     # Cascade
-    n=length(Tk)-1
-    cold_cc = [merc-sum(cold_cc[i:n]) for i=1:n] ./ 1000
+    n=length(Tk)
+    cold_cc = - cold_cc
+    cold_cc = [sum(cold_cc[i:n])+merc for i=1:n] ./ 1000
     hot_cc = [sum(hot_cc[i:n]) for i=1:n] ./ 1000
-
-    # Removing duplicates (long vertical line)
-    ih,oh = findRange(hot_cc)
-    ic,oc = findRange(cold_cc)
 
     # Temperature in celsius
     Tk = Tk .- 273.15
 
     # Plot
-    fig=plot(cold_cc[ic:oc],Tk[ic:oc],label="Cold",lw=2)
-    plot!(fig,hot_cc[ih:oh],Tk[ih:oh],label="Hot",lw=2)
+    fig=plot(cold_cc,Tk,label="Cold",lw=2)
+    plot!(fig,hot_cc,Tk,label="Hot",lw=2)
 
     if save
-        writedlm("hot.csv",[hot_cc[ih:oh] Tk[ih:oh]],",")
-        writedlm("cold.csv",[cold_cc[ic:oc] Tk[ic:oc]],",")
+        writedlm("hot.csv",[hot_cc Tk],",")
+        writedlm("cold.csv",[cold_cc Tk],",")
     end
 
     xlabel!("Net heat load [MW]")
@@ -235,20 +213,21 @@ function plot_cc(heats::Vector{Heat};save::Bool=false)
 end
 
 """
-    compute_gcc(heats::Vector{Heat};utility::Bool=false)::Tuple{Vector{Real},Vector{Real}}
+    compute_gcc(heats::Vector{Heat};utility::Bool=false,solver::DataType)::Tuple{Vector{Real},Vector{Real}}
 
     Delivers the x,y points for the gcc plot
 
     Arguments:
     - 'heats' : Array of heat streams
     - 'utility' : If the heat streams should be treated as utilities for icc plots
+    - 'solver' : Optimization solver
 """
-function compute_gcc(heats::Vector{Heat};utility::Bool=false)::Tuple{Vector{Real},Vector{Real}}
+function compute_gcc(heats::Vector{Heat},solver::DataType;utility::Bool=false)::Tuple{Vector{Real},Vector{Real}}
     # Get values
     Tk = tempInterval(heats)
     Qk_st = heatCascade(heats)
     Qk_hot,Qk_cold = separateHotCold(Qk_st)
-    merh,merc = mer(heats)
+    merh,merc = mer(heats,solver)
     cold_cc=vec(sum(Qk_cold,dims=2)) # into vector
     hot_cc=vec(sum(Qk_hot,dims=2)) # into vector
 
@@ -270,15 +249,16 @@ function compute_gcc(heats::Vector{Heat};utility::Bool=false)::Tuple{Vector{Real
 end
 
 """
-    plot_gcc(heats::Vector{Heat};save::Bool=false)
+    plot_gcc(heats::Vector{Heat},solver::DataType;save::Bool=false)
     Plots the grand composite curves
 
     Arguments:
     - 'heats' : Array of heat streams
     - 'save' : Option to save values in a csv file
+    - 'solver' : Optimization solver
 """
-function plot_gcc(heats::Vector{Heat};save::Bool=false)
-    R,Tk = compute_gcc(heats)
+function plot_gcc(heats::Vector{Heat},solver::DataType;save::Bool=false)
+    R,Tk = compute_gcc(heats,solver)
 
     # Plot GCC
     save && writedlm(filename,[R[x:xo] Tk[x:xo]],",")
@@ -290,7 +270,7 @@ function plot_gcc(heats::Vector{Heat};save::Bool=false)
 end
 
 """
-    plot_icc(heats::Vector{Heat},processes::Int64;save::Bool=false)
+    plot_icc(heats::Vector{Heat},processes::Int64,solver::DataType;save::Bool=false)
     Plots the integrated composite curves
     * Assumes that heats is ordered as processes streams before utility streams
 
@@ -298,11 +278,12 @@ end
     - 'heats' : Array of heat streams
     - 'processes' : Number of streams attributed to processes
     - 'save' : Option to save values in a csv file
+    - 'solver' : Optimization solver
 """
-function plot_icc(heats::Vector{Heat},processes::Int64;save::Bool=false)
+function plot_icc(heats::Vector{Heat},processes::Int64,solver::DataType;save::Bool=false)
     # Get values    
-    R_p,Tk_p = compute_gcc(heats[1:processes])
-    R_u,Tk_u = compute_gcc(heats[(processes+1):end],utility=true)
+    R_p,Tk_p = compute_gcc(heats[1:processes],solver)
+    R_u,Tk_u = compute_gcc(heats[(processes+1):end],solver,utility=true)
 
     # Correcting R_u
     R_u = R_u .- R_u[1] .+ R_p[1]
@@ -323,10 +304,12 @@ end
 
 """
     test_cascade()
-
     Simple test function for the minimal energy requirement problem
+    
+    Arguments
+    - 'solver' : Optimization solver
 """
-function test_cascade()
+function test_cascade(solver)
     # Test problem 4SP1 from Papoulias and Grossmann (1983) 
     C1 = Heat(q=762,Ts=60+273,Tt=160+273,dT=5)
     H2 = Heat(q=589,Ts=160+273,Tt=93+273,dT=5)
@@ -334,20 +317,80 @@ function test_cascade()
     H4 = Heat(q=1171,Ts=249+273,Tt=138+273,dT=5)
 
     heats = [C1,H2,C3,H4]
-    merHot,merCold = mer(heats)
+    merHot,merCold = mer(heats,solver)
 
     println("Computed solution is $(round(merHot)) kW and $(round(merCold)) kW for hot and cold utilities")
     println("Reported solution is 128 kW and 250 kW for hot and cold utilities")
 
-    fig_cc = plot_cc(heats)
-    fig_gcc = plot_gcc(heats)
+    fig_cc = plot_cc(heats,solver)
+    fig_gcc = plot_gcc(heats,solver)
 
     n_p = length(heats)
     HUT = Heat(q=merHot,Ts=270+273,Tt=269+273,dT=5)
     CUT = Heat(q=merCold,Ts=38+273,Tt=82+273,dT=5)
     
     heats = vcat(heats,[HUT,CUT])
-    fig_icc = plot_icc(heats,n_p)
+    fig_icc = plot_icc(heats,n_p,solver)
 
     return plot(fig_cc,fig_gcc,fig_icc,layout=(1,3))
 end
+
+"""
+    vivi_plot(techs::Vector{Tech},utils::Vector{Tech},type::String;time::Int64)
+    Generic plot function for heat integration
+
+    Arguments:
+    - 'techs' : Array of processes techs
+    - 'utils' : Array of utility techs
+    - 'type' : Type of plot
+    - 'time' : Time selected
+    - 'solver' : Optimization solver
+"""
+function vivi_plot(techs::Vector{Tech},utils::Vector{Tech},type::String,solver::DataType;time::Int64=1)
+    # Preparation
+    t_q=Array{Heat,1}()
+    loads_lims_per_tech = [load_limits(t) for t in vcat(techs,utils)]
+    
+    for (τ,tech) in enumerate(vcat(techs,utils))        
+        size = tech.f
+        load = round(tech.f_t[time]/size,digits=3)
+        if size !=0 && load !=0
+            loads = loads_lims_per_tech[τ]
+            index = 1
+            while !(loads[index] <= load <=loads[index+1])
+                index+=1
+            end
+            for heat in tech.h
+                a,b = get_linear_parameters(tech,heat.pw)            
+                hx = heat.q*(tech.f_t[time]*a[index]+b[index]*size)
+                push!(t_q,Heat(q=hx,Ts=heat.Ts,Tt=heat.Tt))
+            end
+        end
+    end
+    if length(t_q) == 0 
+        throw("Error: no heat streams for specified conditions")
+    end
+    heats_p = sum([length(tech.h) for tech in techs])
+    if type == "icc"
+        plot = plot_icc(t_q,heats_p,solver)
+    elseif type == "cc"
+        plot=plot_cc(t_q,solver)
+    elseif type == "gcc"
+        plot=plot_gcc(t_q,solver)
+    end
+
+    return plot
+end
+
+vivi_icc(techs::Vector{Tech},utils::Vector{Tech},solver::DataType;time::Int64=1) = vivi_plot(techs,utils,"icc",solver,time=time)
+vivi_icc(techs::Tech,solver::DataType;time::Int64=1) = vivi_plot([techs],Vector{Tech}(),"icc",solver,time=time)
+vivi_icc(problem::Problem,solver::DataType;time::Int64=1) = vivi_plot(problem.p,problem.ut,"icc",solver,time=time)
+
+vivi_gcc(techs::Vector{Tech},utils::Vector{Tech},solver::DataType;time::Int64=1) = vivi_plot(techs,utils,"gcc",solver,time=time)
+vivi_gcc(techs::Vector{Tech},solver::DataType;time::Int64=1) = vivi_plot(techs,Vector{Tech}(),"gcc",solver,time=time)
+vivi_gcc(techs::Tech,solver::DataType;time::Int64=1) = vivi_plot([techs],Vector{Tech}(),"gcc",solver,time=time)
+vivi_gcc(problem::Problem,solver::DataType;time::Int64=1) = vivi_plot(problem.p,problem.ut,"gcc",solver,time=time)
+
+vivi_cc(techs::Vector{Tech},utils::Vector{Tech},solver::DataType;time::Int64=1) = vivi_plot(techs,utils,"cc",solver,time=time)
+vivi_cc(techs::Tech,solver::DataType;time::Int64=1) = vivi_plot([techs],Vector{Tech}(),"cc",solver,time=time)
+vivi_cc(prob::Problem,solver::DataType;time::Int64=1) = vivi_plot(prob.p,prob.ut,"cc",solver,time=time)

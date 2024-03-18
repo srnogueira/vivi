@@ -1,7 +1,11 @@
 using Graphs, GraphPlot
 import PlotlyJS
 
-function vivi_graph(inputs,techs,outputs,utils,store)
+"""
+    vivi_graph(inputs::Vector{Resource},techs::Vector{Tech},outputs::Vector{Resource},utils::Vector{Tech},store::Vector{Storage})
+    Plots a graph representation
+"""
+function vivi_graph(inputs::Vector{Resource},techs::Vector{Tech},outputs::Vector{Resource},utils::Vector{Tech},store::Vector{Storage})
     g = DiGraph()
     vertex = Dict{String,Int64}()
     names = []
@@ -11,16 +15,16 @@ function vivi_graph(inputs,techs,outputs,utils,store)
     count = 1
     for tech in techs_all
         add_vertex!(g)
-        vertex[tech.type] = count
-        push!(names,tech.type)
+        vertex[tech.n] = count
+        push!(names,tech.n)
         count += 1
     end
     n_tech = nv(g)
 
     for s in store
         add_vertex!(g)
-        vertex["$(s.type) storage"] = count
-        push!(names,"$(s.type) storage")
+        vertex[s.n] = count
+        push!(names,s.n)
         count += 1
     end
     n_store = nv(g)
@@ -28,20 +32,20 @@ function vivi_graph(inputs,techs,outputs,utils,store)
     resources = Set{String}()
     # There is an option to ommit this
     for tech in techs_all
-        for input in tech.in
-            push!(resources,input.type)
+        for input in tech.i
+            push!(resources,input.t.n)
         end
-        for output in tech.out
-            push!(resources,output.type)
+        for output in tech.o
+            push!(resources,output.t.n)
         end
     end
 
     # Resources in and out
     for input in inputs
-        push!(resources,input.type)
+        push!(resources,input.t.n)
     end
     for output in outputs
-        push!(resources,output.type)
+        push!(resources,output.t.n)
     end
 
     for resource in resources
@@ -53,28 +57,25 @@ function vivi_graph(inputs,techs,outputs,utils,store)
 
     # Create edge ##############################################################
     for tech in techs_all
-        for input in tech.in
-            i = vertex[input.type]
-            j = vertex[tech.type]
+        for input in tech.i
+            i = vertex[input.t.n]
+            j = vertex[tech.n]
             add_edge!(g,i,j)
         end
-        for output in tech.out
-            i = vertex[tech.type]
-            j = vertex[output.type]
+        for output in tech.o
+            i = vertex[tech.n]
+            j = vertex[output.t.n]
             add_edge!(g,i,j)
         end
     end
 
     for s in store
-        if issubset([s.type],resources)
-            i = vertex["$(s.type) storage"]
-            j = vertex[s.type]
+        if issubset([s.t.n],resources)
+            i = vertex[s.n]
+            j = vertex[s.t.n]
             add_edge!(g,i,j)
         end
     end
-
-    # Names
-    #graphplot(g,names=names,edgelabel=edgelabel_dict,nodeshape=:rect,curves=false)
 
     pos_x, pos_y = GraphPlot.spring_layout(g)
 
@@ -148,7 +149,6 @@ function vivi_graph(inputs,techs,outputs,utils,store)
         [edges_trace, nodes_trace, nodes_trace2, nodes_trace3],
         PlotlyJS.Layout(
             hovermode="closest",
-            #title="Network Graph made with Julia",
             titlefont_size=16,
             showlegend=false,
             showarrow=false,
@@ -157,7 +157,12 @@ function vivi_graph(inputs,techs,outputs,utils,store)
         )
     )
 end
-function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatExergy=false,showHeat=true)
+
+"""
+    vivi_sankey(inputs::Vector{Resource},techs::Vector{Tech},outputs::Vector{Resource},utils::Vector{Tech},store::Vector{Storage};time::Int64=1,valueIndex::Int64=0,heatExergy::Bool=false,showHeat::Bool=true)
+    Plots a sankey diagram
+"""
+function vivi_sankey(inputs::Vector{Resource},techs::Vector{Tech},outputs::Vector{Resource},utils::Vector{Tech},store::Vector{Storage};time::Int64=1,valueIndex::Int64=0,heatExergy::Bool=false,showHeat::Bool=true)
     # Could be just a set
     vertex = Dict{String,Int64}()
     names = []
@@ -166,27 +171,34 @@ function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatEx
     techs_all=vcat(techs,utils) # join techs and utils
     count = 1
     for tech in techs_all
-        vertex[tech.type] = count
-        push!(names,tech.type)
+        vertex[tech.n] = count
+        push!(names,tech.n)
         count += 1
     end
     n_s = count
 
+    for s in store
+        vertex[s.n] = count
+        push!(names,s.n)
+        count += 1
+    end
+    n_s2 = count
+
     # Resources
     resources = Set{String}()
     for tech in techs_all
-        for input in tech.in
-            push!(resources,input.type)
+        for input in tech.i
+            push!(resources,input.t.n)
         end
-        for output in tech.out
-            push!(resources,output.type)
+        for output in tech.o
+            push!(resources,output.t.n)
         end
     end
     for input in inputs
-        push!(resources,input.type)
+        push!(resources,input.t.n)
     end
     for output in outputs
-        push!(resources,output.type)
+        push!(resources,output.t.n)
     end
     for resource in resources
         vertex[resource] = count
@@ -201,42 +213,42 @@ function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatEx
     push!(names,"Heat network")
 
     # Connections
-    max_segments_per_tech,loads_lims_per_tech = segments_loads_per_tech(techs_all)
-
+    loads_lims_per_tech = [load_limits(t) for t in techs_all]
     connections = []
-    for (τ,tech) in enumerate(techs_all)
-        size = maximum(tech.size)
-        load = tech.size[time]/size
-        loads = loads_lims_per_tech[τ]
 
-        if tech.size[time] != 0
+    # Techs
+    for (τ,tech) in enumerate(techs_all)
+        size = tech.f
+        load = round(tech.f_t[time]/size,digits=3)
+        loads = loads_lims_per_tech[τ]
+        if round(tech.f_t[time],digits=3) != 0
             s = 1
             while !(loads[s] <= load <=loads[s+1])
                 s+=1
             end
-            
-            for input in tech.in
-                i = vertex[input.type]
-                j = vertex[tech.type]
+            for input in tech.i
+                i = vertex[input.t.n]
+                j = vertex[tech.n]
                 
-                a,b = get_linear_parameters(loads,input.loadEffect,max_segments_per_tech[τ])
-                index = length(input.amount) == 1 ? 1 : time # Amount or size?
-                qnt = input.amount[index]*(tech.size[time]*a[s]+b[s]*size)
+                a,b = get_linear_parameters(tech,input.pw)
+                index = length(input.r) == 1 ? 1 : time # Amount or size?
+                qnt = input.r[index]*(tech.f_t[time]*a[s]+b[s]*size)
                 if valueIndex != 0
-                    value = length(input.value[valueIndex]) == 1 ? input.value[valueIndex][1] : input.value[valueIndex][time]
+                    value = length(input.t.c[:,valueIndex]) == 1 ? input.t.c[1,valueIndex] : input.t.c[time,valueIndex]
                     qnt*=value
                 end
                 append!(connections,[[i,j,qnt]])
             end
-            for output in tech.out
-                i = vertex[tech.type]
-                j = vertex[output.type]
+            
+            for output in tech.o
+                i = vertex[tech.n]
+                j = vertex[output.t.n]
 
-                a,b = get_linear_parameters(loads,output.loadEffect,max_segments_per_tech[τ])
-                index = length(output.amount) == 1 ? 1 : time # Amount or size?
-                qnt = output.amount[index]*(tech.size[time]*a[s]+b[s]*size)
+                a,b = get_linear_parameters(tech,output.pw)
+                index = length(output.r) == 1 ? 1 : time # Amount or size?
+                qnt = output.r[index]*(tech.f_t[time]*a[s]+b[s]*size)
                 if valueIndex != 0
-                    value = length(output.value[valueIndex]) == 1 ? output.value[valueIndex][1] : output.value[valueIndex][time]
+                    value = length(output.t.c[:,valueIndex]) == 1 ? output.t.c[1,valueIndex] : output.t.c[time,valueIndex]
                     qnt*=value
                 end
                 
@@ -245,16 +257,29 @@ function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatEx
         end
     end
 
+    for s in store
+        i = vertex[s.t.n]
+        j = vertex[s.n]
+        qnt = time >1 ? s.f_t[time]-s.f_t[time-1] : s.f_t[time] - s.a
+
+        if qnt > 0
+            append!(connections,[[i,j,qnt]])
+        else
+            append!(connections,[[j,i,-qnt]])
+        end
+    end
+
+    # Heat
     n_heat = length(connections)
     heatNetwork = false
     if showHeat
         for (τ,tech) in enumerate(techs_all)
             
-            size = maximum(tech.size)
-            load = tech.size[time]/size
+            size = tech.f
+            load = round(tech.f_t[time]/size,digits=3)
             loads = loads_lims_per_tech[τ]
 
-            if tech.size[time] != 0
+            if round(tech.f_t[time],digits=3) != 0
                 s = 1
                 while !(loads[s] <= load <=loads[s+1])
                     s+=1
@@ -262,13 +287,13 @@ function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatEx
                 
                 qnt_in = 0
                 qnt_out = 0
-                for heat in tech.heat
+                for heat in tech.h
 
-                    a,b = get_linear_parameters(loads,heat.loadEffect,max_segments_per_tech[τ])
-                    heat_flow = heat.h*(tech.size[time]*a[s]+b[s]*size)
+                    a,b = get_linear_parameters(tech,heat.pw)
+                    heat_flow = heat.q*(tech.f_t[time]*a[s]+b[s]*size)
 
                     if !heatExergy 
-                        qnt = heat_flow # have a switch for exergy
+                        qnt = heat_flow
                     else
                         qnt = heat_flow*(1-298.15/(heat.Tt-heat.Ts)*log(heat.Tt/heat.Ts))
                     end
@@ -280,8 +305,8 @@ function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatEx
                     end
                     heatNetwork = true
                 end
-                append!(connections,[[count,vertex[tech.type],qnt_in]])
-                append!(connections,[[vertex[tech.type],count,qnt_out]])
+                append!(connections,[[count,vertex[tech.n],qnt_in]])
+                append!(connections,[[vertex[tech.n],count,qnt_out]])
                     
             end
         end
@@ -298,7 +323,8 @@ function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatEx
     end
 
     # Color slices
-    color = [i<n_s ? "blue" : "#90EE90" for i=1:count]
+    color = [i<n_s ? "blue" : (i<n_s2 ? "purple" : "#90EE90") for i=1:count]
+
     if heatNetwork
         color[count] = "red"
     end
@@ -322,3 +348,11 @@ function vivi_sankey(inputs,techs,outputs,utils,store;time=1,valueIndex=0,heatEx
       ))
     )
 end
+
+# Graph shortcuts
+vivi_graph(tech::Tech) = vivi_graph(tech.i,[tech],tech.o,Vector{Tech}(),Vector{Storage}())
+vivi_graph(problem::Problem) = vivi_graph(problem.i,problem.p,problem.o,problem.ut,problem.st)
+
+# Sankey shortcuts
+vivi_sankey(tech::Tech;time::Int64=1,valueIndex::Int64=0,heatExergy::Bool=false,showHeat::Bool=true) = vivi_sankey(tech.i,[tech],tech.o,Vector{Tech}(),Vector{Storage}(),time=time,valueIndex=valueIndex,heatExergy=heatExergy,showHeat=showHeat)
+vivi_sankey(problem::Problem;time::Int64=1,valueIndex::Int64=0,heatExergy::Bool=false,showHeat::Bool=true) = vivi_sankey(problem.i,problem.p,problem.o,problem.ut,problem.st,time=time,valueIndex=valueIndex,heatExergy=heatExergy,showHeat=showHeat)
